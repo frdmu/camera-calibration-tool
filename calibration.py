@@ -1,3 +1,9 @@
+import os
+import cv2 as cv
+import numpy as np
+import glob
+import xml.etree.ElementTree as ET
+import argparse
 class CameraCalibrator(object):
     def __init__(self, image_size:tuple):
         super(CameraCalibrator, self).__init__()
@@ -65,25 +71,23 @@ class CameraCalibrator(object):
         for file_name in file_names:
             # read image
             chess_img = cv.imread(file_name)
-            assert(chess_img.shape[0] == self.image_size[1] and chess_img.shape[1] == self.image_size[0], \
-                "Image size does not match the given value {}.".format(self.image_size))
+            assert (chess_img.shape[0] == self.image_size[1] and chess_img.shape[1] == self.image_size[0]), \
+                "Image size does not match the given value {}.".format(self.image_size)
             # to gray
             gray = cv.cvtColor(chess_img, cv.COLOR_BGR2GRAY) 
-            print("gray is :")
-            print(gray)
             # find chessboard corners
             ret, img_corners = cv.findChessboardCorners(gray, (corner_height, corner_width))
 
             # append to img_corners
             if ret:
                 objs_corner.append(obj_corner)
-                img_corners = cv.cornerSubPix(gray, img_corners, winSize=(squrae_size//2, square_size//2),
+                img_corners = cv.cornerSubPix(gray, img_corners, winSize=(square_size//2, square_size//2),
                                               zeroZone=(-1, -1), criteria=criteria)
                 imgs_corner.append(img_corners)
             else:
                 print("Fail to find corners in {}.".format(file_name))
         # calibration
-        ret, self.matrix, self.dist, rvecs, tveces = cv.calibrateCamera(objs_corner, imags_corner, self.image_size, None, None)
+        ret, self.matrix, self.dist, rvecs, tveces = cv.calibrateCamera(objs_corner, imgs_corner, self.image_size, None, None)
         self.new_camera_matrix, roi = cv.getOptimalNewCameraMatrix(self.matrix, self.dist, self.image_size, alpha=1)
         self.roi = np.array(roi)
         return ret
@@ -104,14 +108,17 @@ if __name__ == '__main__':
     parser.add_argument('--square', type=int, help='size of chessboard square, by mm')
     parser.add_argument('--corner', type=str, help='width*height of chessboard corner, width and height both are represent the numbers of inner conner points')
     parser.add_argument('--video_path', type=str, help='video to rectify')
-    parser.add_argument('__camera_id', type=int, help='camera_id, default=0', default=0)
+    parser.add_argument('--camera_id', type=int, help='camera_id, default=0', default=0)
+    args = parser.parse_args()
+    calibrator = None
 
+ 
     try:
-        image_size = tuple(int(i) for i in args.image_size.split('x'))
-        calibrator = CameraCalibrator(image_size)
+    	image_size = tuple(int(i) for i in args.image_size.split('x'))
+    	calibrator = CameraCalibrator(image_size)
     except:
         print("Invalid/Missing parameter: --image_size. Sample: \n\n"
-              "    --image_size 1920*1080\n")
+              "    --image_size 1920x1080\n")
         exit(-1)
     
     if args.mode == 'calibrate':
@@ -121,7 +128,7 @@ if __name__ == '__main__':
                   "    --square <length of square>\n")
             exit(-1)
         corner = tuple(int(i) for i in args.corner.split('x'))
-        if calibrator.calibratoin(corner[1], corner[0], args.square):
+        if calibrator.calibration(corner[1], corner[0], args.square):
             calibrator.save_params()
         else:
             print('Calibration failed.')
